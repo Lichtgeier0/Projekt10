@@ -1,0 +1,10 @@
+pandas>=2.2
+numpy>=1.26
+matplotlib>=3.8
+scikit-learn>=1.4
+streamlit>=1.32
+PyYAML>=6.0
+black>=24.3
+ruff>=0.3
+mypy>=1.9
+pytest>=8.2
