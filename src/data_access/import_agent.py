@@ -185,19 +185,20 @@ def _deduplicate_transactions(transactions: List[Dict[str, object]]) -> List[Dic
     return unique
 
 
-POSSIBLE_DATE_COLUMNS = ["datum", "buchungstag", "valuta", "wertstellung"]
-POSSIBLE_DESC_COLUMNS = ["verwendungszweck", "buchungstext", "beschreibung", "text"]
+POSSIBLE_DATE_COLUMNS = ["buchungsdatum", "datum", "buchungstag", "valuta", "wertstellung"]
+POSSIBLE_DESC_COLUMNS = ["verwendungszweck", "beschreibung", "zahlungsempfänger", "buchungstext", "text"]
 POSSIBLE_AMOUNT_COLUMNS = ["betrag", "umsatz", "amount"]
 
 
 def _detect_columns(header: List[str]) -> Dict[str, str]:
-    lower = [h.lower().strip() for h in header]
+    raw = [ _normalize_header_cell(h) for h in header ]
+    lower = [h.lower() for h in raw]
 
     def find(possible: List[str]) -> str | None:
         for candidate in possible:
             key = candidate.lower()
             if key in lower:
-                return header[lower.index(key)]
+                return raw[lower.index(key)]
         return None
 
     date_col = find(POSSIBLE_DATE_COLUMNS)
@@ -210,6 +211,12 @@ def _detect_columns(header: List[str]) -> Dict[str, str]:
         )
 
     return {"date": date_col, "description": desc_col, "amount": amount_col}
+
+
+def _normalize_header_cell(cell: str | None) -> str:
+    if cell is None:
+        return ""
+    return cell.replace("\ufeff", "").strip()
 
 
 def _load_pdfplumber():

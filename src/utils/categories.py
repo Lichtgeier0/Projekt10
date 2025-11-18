@@ -93,6 +93,7 @@ KEYWORD_MAP: Dict[str, str] = {
     "rewe": "EXP_GROCERIES",
     "edeka": "EXP_GROCERIES",
     "aldi": "EXP_GROCERIES",
+    "bäckerei": "EXP_GROCERIES",
     "drogerie": "EXP_GROCERIES",
     "apotheke": "EXP_HEALTH_INSURANCE",
     "versicherung": "EXP_HEALTH_INSURANCE",

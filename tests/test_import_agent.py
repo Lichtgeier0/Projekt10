@@ -17,6 +17,18 @@ def test_parse_statement_csv_basic() -> None:
     assert result[1]["category"] == "INCOME_SALARY"
 
 
+def test_parse_statement_csv_with_extended_header() -> None:
+    csv_content = (
+        "\ufeffTransaktionstyp;Buchungsdatum;Karteneinsatz;Betrag;Zahlungsempfänger;IBAN;BIC;Verwendungszweck;Beschreibung;Kontonummer\n"
+        "Belastung;18.11.2025;Ja;-12,34;Bäckerei;;;Bäckerei Kauf;Notiz;12345678\n"
+    )
+    result = import_agent.parse_statement(csv_content.encode("utf-8"), "konto.csv")
+    assert len(result) == 1
+    assert result[0]["amount"] == -12.34
+    assert "Bäckerei" in result[0]["description"]
+    assert result[0]["category"] == "EXP_GROCERIES"
+
+
 def test_parse_statement_csv_skips_invalid_rows() -> None:
     csv_content = (
         "Datum;Text;Betrag;Kategorie\n"
