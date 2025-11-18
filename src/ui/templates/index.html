@@ -23,6 +23,18 @@
   </head>
   <body>
     <h1>Persönlicher Ausgaben-Manager</h1>
+    <p><a href="{{ url_for('upload_statement_form') }}">Kontoauszug hochladen</a></p>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="warnings">
+          <ul>
+            {% for message in messages %}
+              <li>{{ message }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
     <section>
       <h2>Neue Transaktion</h2>
       <form id="tx-form">

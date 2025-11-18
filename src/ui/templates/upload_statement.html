@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kontoauszug hochladen</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 2rem; background: #f8f9fb; }
+      form { display: flex; flex-direction: column; gap: 1rem; max-width: 500px; background: #fff; padding: 1.5rem; border-radius: 8px; }
+      input[type="file"] { border: 1px dashed #ccc; padding: 1rem; border-radius: 4px; }
+      button { padding: 0.6rem 1rem; border: none; background: #2c3e50; color: #fff; border-radius: 4px; cursor: pointer; }
+      .messages { margin-bottom: 1rem; color: #c0392b; }
+      a { color: #2c3e50; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Kontoauszug importieren</h1>
+    <p><a href="{{ url_for('index') }}">&larr; Zurück zur Übersicht</a></p>
+    <div class="messages">
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <ul>
+            {% for message in messages %}
+              <li>{{ message }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+    </div>
+    <form action="{{ url_for('handle_upload_statement') }}" method="post" enctype="multipart/form-data">
+      <label for="statement">Kontoauszug (CSV bevorzugt, PDF/Bild experimentell)</label>
+      <input type="file" id="statement" name="statement" accept=".csv,.pdf,image/*" required />
+      <button type="submit">Kontoauszug hochladen</button>
+    </form>
+  </body>
+</html>

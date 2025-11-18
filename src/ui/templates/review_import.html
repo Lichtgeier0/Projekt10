@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Import überprüfen</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 2rem; background: #f8f9fb; }
+      table { border-collapse: collapse; width: 100%; background: #fff; border-radius: 8px; overflow: hidden; }
+      th, td { border: 1px solid #e1e1e1; padding: 0.5rem; text-align: left; }
+      th { background: #f0f0f0; }
+      input[type="text"], input[type="date"], input[type="number"] { width: 100%; padding: 0.3rem; border: 1px solid #ccc; border-radius: 4px; }
+      button { padding: 0.6rem 1rem; border: none; background: #2c3e50; color: #fff; border-radius: 4px; cursor: pointer; margin-top: 1rem; }
+      .actions { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+  </head>
+  <body>
+    <h1>Import überprüfen</h1>
+    <p>Bitte bestätige die erkannten Transaktionen, bevor sie gespeichert werden.</p>
+    <form action="{{ url_for('confirm_import') }}" method="post">
+      <input type="hidden" name="token" value="{{ token }}" />
+      <table>
+        <thead>
+          <tr>
+            <th>Übernehmen</th>
+            <th>Datum</th>
+            <th>Beschreibung</th>
+            <th>Betrag (EUR)</th>
+            <th>Kategorie</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tx in transactions %}
+            <tr>
+              <td>
+                <input type="checkbox" name="include-{{ loop.index0 }}" checked />
+              </td>
+              <td>
+                <input type="date" name="date-{{ loop.index0 }}" value="{{ tx.date }}" required />
+              </td>
+              <td>
+                <input type="text" name="description-{{ loop.index0 }}" value="{{ tx.description }}" required />
+              </td>
+              <td>
+                <input type="number" step="0.01" name="amount-{{ loop.index0 }}" value="{{ '%.2f'|format(tx.amount) }}" required />
+              </td>
+              <td>
+                <input type="text" name="category-{{ loop.index0 }}" value="{{ tx.category or 'Unbekannt' }}" />
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="actions">
+        <a href="{{ url_for('upload_statement_form') }}">&larr; Zurück</a>
+        <button type="submit">Ausgewählte Transaktionen übernehmen</button>
+      </div>
+    </form>
+  </body>
+</html>

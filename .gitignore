@@ -215,3 +215,5 @@ data/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/models/.gitkeep
+docs/plots/*.png
+!docs/plots/.gitkeep

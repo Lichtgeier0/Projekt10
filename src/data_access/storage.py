@@ -12,11 +12,78 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from src.utils.config import BudgetConfig, load_budget_config
 
 CSV_FIELDS = ("date", "description", "amount", "category")
+COLUMN_SYNONYMS: Dict[str, List[str]] = {
+    "date": ["datum", "buchungstag", "date"],
+    "description": ["beschreibung", "verwendungszweck", "text", "memo", "description"],
+    "amount": ["betrag", "umsatz", "value", "amount"],
+    "category": ["kategorie", "category", "typ", "type"],
+}
 SAMPLE_TRANSACTIONS = (
     {"date": "2025-01-05", "description": "Supermarkt", "amount": "-45.20", "category": "Lebensmittel"},
     {"date": "2025-01-10", "description": "Gehalt", "amount": "2500.00", "category": "Einnahmen"},
     {"date": "2025-01-18", "description": "Miete", "amount": "-820.00", "category": "Miete"},
 )
+
+
+def build_column_mapping(headers: List[str], overrides: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    """Resolve column names using overrides and known synonyms."""
+    overrides = overrides or {}
+    normalized_headers = {h.lower(): h for h in headers}
+    mapping: Dict[str, str] = {}
+    for field in CSV_FIELDS:
+        source = overrides.get(field)
+        if not source:
+            candidates = [field] + COLUMN_SYNONYMS.get(field, [])
+            for candidate in candidates:
+                key = candidate.lower()
+                if key in normalized_headers:
+                    source = normalized_headers[key]
+                    break
+        if not source:
+            raise ValueError(f"CSV fehlt Spalte für Feld '{field}'")
+        lookup = source.lower()
+        if lookup not in normalized_headers:
+            raise ValueError(f"CSV enthält keine Spalte '{source}'")
+        mapping[field] = normalized_headers[lookup]
+    return mapping
+
+
+def normalize_transaction_dict(tx: Dict[str, Any]) -> Dict[str, str]:
+    """Normalize raw transaction data to canonical string fields."""
+    normalized: Dict[str, str] = {}
+    for field in CSV_FIELDS:
+        if field not in tx:
+            raise ValueError(f"Feld '{field}' fehlt in Transaktion")
+        value = tx[field]
+        if field == "amount":
+            normalized[field] = f"{_normalize_amount(value):.2f}"
+        elif field == "date":
+            normalized[field] = _format_date(value)
+        else:
+            normalized[field] = str(value).strip()
+    return normalized
+
+
+def _normalize_amount(value: Any) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    string_value = str(value).strip()
+    string_value = string_value.replace(" ", "")
+    if string_value.count(",") == 1 and string_value.count(".") > 1:
+        string_value = string_value.replace(".", "")
+    string_value = string_value.replace(",", ".")
+    return float(string_value)
+
+
+def _format_date(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, str):
+        clean = value.strip()
+        for char in ["/", ".", ","]:
+            clean = clean.replace(char, "-")
+        return datetime.fromisoformat(clean).date().isoformat()
+    raise ValueError("Datum muss datetime oder ISO-String sein")
 
 
 @dataclass
@@ -46,7 +113,7 @@ class ExpenseStorage:
 
     def add_transaction(self, tx: Dict[str, Any]) -> None:
         """Persist a new transaction record."""
-        normalized = self._normalize_transaction(tx)
+        normalized = normalize_transaction_dict(tx)
         if self._is_duplicate(normalized):
             raise ValueError("Transaktion existiert bereits (Datum+Beschreibung+Betrag).")
         self._append_rows([normalized])
@@ -67,11 +134,11 @@ class ExpenseStorage:
         existing_keys = self._get_existing_keys()
         with csv_path.open("r", encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)
-            mapping = self._build_mapping(reader.fieldnames or [], column_mapping or {})
+            mapping = build_column_mapping(reader.fieldnames or [], column_mapping or {})
             for idx, row in enumerate(reader, start=2):  # header is line 1
                 try:
                     mapped = {field: row[mapping[field]] for field in CSV_FIELDS}
-                    normalized = self._normalize_transaction(mapped)
+                    normalized = normalize_transaction_dict(mapped)
                 except ValueError as exc:
                     report.errors.append(f"Zeile {idx}: {exc}")
                     continue
@@ -111,40 +178,6 @@ class ExpenseStorage:
         if self.csv_path.exists():
             return
         self._write_rows(SAMPLE_TRANSACTIONS, include_header=True)
-
-    def _build_mapping(self, headers: List[str], overrides: Dict[str, str]) -> Dict[str, str]:
-        normalized_headers = {h.lower(): h for h in headers}
-        mapping: Dict[str, str] = {}
-        for field in CSV_FIELDS:
-            source = overrides.get(field, field)
-            lookup = source.lower()
-            if lookup not in normalized_headers:
-                raise ValueError(f"CSV fehlt Spalte '{source}' für Feld '{field}'")
-            mapping[field] = normalized_headers[lookup]
-        return mapping
-
-    def _normalize_transaction(self, tx: Dict[str, Any]) -> Dict[str, str]:
-        normalized: Dict[str, str] = {}
-        for field in CSV_FIELDS:
-            if field not in tx:
-                raise ValueError(f"Feld '{field}' fehlt in Transaktion")
-            value = tx[field]
-            if field == "amount":
-                normalized[field] = f"{float(value):.2f}"
-            elif field == "date":
-                normalized[field] = self._format_date(value)
-            else:
-                normalized[field] = str(value)
-        return normalized
-
-    def _format_date(self, value: Any) -> str:
-        if isinstance(value, datetime):
-            return value.date().isoformat()
-        if isinstance(value, str):
-            # Accept ISO-like strings (YYYY-MM-DD or YYYY/MM/DD)
-            clean = value.replace("/", "-")
-            return datetime.fromisoformat(clean).date().isoformat()
-        raise ValueError("Datum muss datetime oder ISO-String sein")
 
     def _append_rows(self, rows: Iterable[Dict[str, str]]) -> None:
         file_exists = self.csv_path.exists()
