@@ -7,3 +7,6 @@ flask
 tabulate
 pytest
 python-dotenv
+pdfplumber
+pytesseract
+Pillow

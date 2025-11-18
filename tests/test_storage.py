@@ -8,7 +8,7 @@ from src.utils.config import BudgetConfig
 
 def make_storage(tmp_path: Path) -> ExpenseStorage:
     csv_path = tmp_path / "transactions.csv"
-    config = BudgetConfig(category_limits={"Lebensmittel": 50.0}, warning_threshold=0.5)
+    config = BudgetConfig(category_limits={"EXP_GROCERIES": 50.0}, warning_threshold=0.5)
     return ExpenseStorage(csv_path=csv_path, budget_config=config, seed_with_samples=False)
 
 
@@ -20,6 +20,7 @@ def test_add_and_list_transactions(tmp_path: Path) -> None:
     result = storage.list_transactions("2025-02")
     assert len(result) == 1
     assert result[0]["description"] == "Testkauf"
+    assert result[0]["category"] == "EXP_GROCERIES"
 
 
 def test_check_budget_limits_warns(tmp_path: Path) -> None:
@@ -28,7 +29,7 @@ def test_check_budget_limits_warns(tmp_path: Path) -> None:
         {"date": "2025-02-02", "description": "Supermarkt", "amount": -40, "category": "Lebensmittel"}
     )
     warnings = storage.check_budget_limits()
-    assert "Lebensmittel" in warnings
+    assert "EXP_GROCERIES" in warnings
 
 
 def test_import_csv_with_mapping_and_dedup(tmp_path: Path) -> None:
@@ -51,3 +52,4 @@ def test_import_csv_with_mapping_and_dedup(tmp_path: Path) -> None:
     assert len(report.errors) == 1
     results = storage.list_transactions("2025-02")
     assert len(results) == 1
+    assert results[0]["category"] == "EXP_GROCERIES"

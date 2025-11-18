@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from src.utils.config import BudgetConfig, load_budget_config
+from src.utils.categories import normalize_category
 
 CSV_FIELDS = ("date", "description", "amount", "category")
 COLUMN_SYNONYMS: Dict[str, List[str]] = {
@@ -61,6 +62,10 @@ def normalize_transaction_dict(tx: Dict[str, Any]) -> Dict[str, str]:
             normalized[field] = _format_date(value)
         else:
             normalized[field] = str(value).strip()
+    amount_value = float(normalized["amount"])
+    normalized["category"] = normalize_category(
+        tx.get("category"), amount_value, normalized.get("description")
+    )
     return normalized
 
 
@@ -82,6 +87,9 @@ def _format_date(value: Any) -> str:
         clean = value.strip()
         for char in ["/", ".", ","]:
             clean = clean.replace(char, "-")
+        parts = clean.split("-")
+        if len(parts) == 3 and len(parts[0]) == 2 and len(parts[2]) == 4:
+            clean = f"{parts[2]}-{parts[1]}-{parts[0]}"
         return datetime.fromisoformat(clean).date().isoformat()
     raise ValueError("Datum muss datetime oder ISO-String sein")
 
@@ -211,6 +219,9 @@ class ExpenseStorage:
             for row in reader:
                 parsed = {**row}
                 parsed["amount"] = float(parsed["amount"])
+                parsed["category"] = normalize_category(
+                    parsed.get("category"), parsed["amount"], parsed.get("description")
+                )
                 rows.append(parsed)
             return rows
 

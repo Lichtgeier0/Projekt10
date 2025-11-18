@@ -44,7 +44,15 @@
                 <input type="number" step="0.01" name="amount-{{ loop.index0 }}" value="{{ '%.2f'|format(tx.amount) }}" required />
               </td>
               <td>
-                <input type="text" name="category-{{ loop.index0 }}" value="{{ tx.category or 'Unbekannt' }}" />
+                <select name="category-{{ loop.index0 }}">
+                  {% for group, cats in category_groups.items() %}
+                    <optgroup label="{{ 'Einnahmen' if group == 'income' else 'Ausgaben' }}">
+                      {% for cat in cats %}
+                        <option value="{{ cat.key }}" {% if tx.category == cat.key %}selected{% endif %}>{{ cat.label }}</option>
+                      {% endfor %}
+                    </optgroup>
+                  {% endfor %}
+                </select>
               </td>
             </tr>
           {% endfor %}

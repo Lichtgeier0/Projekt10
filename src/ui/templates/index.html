@@ -52,7 +52,15 @@
         </label>
         <label>
           Kategorie
-          <input type="text" name="category" required />
+          <select name="category" required>
+            {% for group, cats in category_groups.items() %}
+              <optgroup label="{{ 'Einnahmen' if group == 'income' else 'Ausgaben' }}">
+                {% for cat in cats %}
+                  <option value="{{ cat.key }}">{{ cat.label }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
         </label>
         <button type="submit">Speichern</button>
       </form>
@@ -76,7 +84,7 @@
               <td>{{ tx.date }}</td>
               <td>{{ tx.description }}</td>
               <td class="{% if tx.amount < 0 %}negative{% else %}positive{% endif %}">{{ '%.2f'|format(tx.amount) }} €</td>
-              <td>{{ tx.category }}</td>
+              <td>{{ category_labels.get(tx.category, tx.category) }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -87,7 +95,7 @@
       <strong>Budget-Warnungen</strong>
       <ul id="warnings-list">
         {% for category, ratio in warnings.items() %}
-          <li>{{ category }}: {{ (ratio * 100) | round(0) }}% des Limits verbraucht</li>
+          <li>{{ category_labels.get(category, category) }}: {{ (ratio * 100) | round(0) }}% des Limits verbraucht</li>
         {% endfor %}
       </ul>
     </section>
@@ -102,6 +110,7 @@
     </section>
 
     <script>
+      const CATEGORY_LABELS = {{ category_labels | tojson }};
       async function loadTransactions() {
         const response = await fetch("/api/transactions");
         if (!response.ok) {
@@ -113,11 +122,12 @@
         data.forEach((tx) => {
           const row = document.createElement("tr");
           const amount = Number(tx.amount);
+          const label = CATEGORY_LABELS[tx.category] || tx.category;
           row.innerHTML = `
             <td>${tx.date}</td>
             <td>${tx.description}</td>
             <td class="${amount < 0 ? "negative" : "positive"}">${amount.toFixed(2)} €</td>
-            <td>${tx.category}</td>
+            <td>${label}</td>
           `;
           tbody.appendChild(row);
         });
@@ -133,7 +143,8 @@
         list.innerHTML = "";
         Object.entries(data).forEach(([category, ratio]) => {
           const item = document.createElement("li");
-          item.textContent = `${category}: ${(ratio * 100).toFixed(0)}% des Limits verbraucht`;
+          const label = CATEGORY_LABELS[category] || category;
+          item.textContent = `${label}: ${(ratio * 100).toFixed(0)}% des Limits verbraucht`;
           list.appendChild(item);
         });
       }

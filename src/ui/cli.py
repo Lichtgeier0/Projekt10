@@ -8,6 +8,12 @@ from typing import Dict, List, Optional
 from src.data_access.storage import ExpenseStorage
 from src.categorization.categorizer import Categorizer
 from src.visualization.charts import ChartService
+from src.utils.categories import (
+    CATEGORY_LABELS,
+    get_category_groups,
+    normalize_category,
+    suggest_category,
+)
 
 
 class ExpenseCLI:
@@ -55,10 +61,13 @@ class ExpenseCLI:
         date = input("Datum (YYYY-MM-DD): ").strip()
         description = input("Beschreibung: ").strip()
         amount = input("Betrag (negativ = Ausgabe): ").strip()
-        category = input("Kategorie (leer = automatisch): ").strip()
-        if not category:
-            category = self.categorizer.predict(description)
-            print(f"Vorgeschlagene Kategorie: {category}")
+        amount_value = self._parse_amount(amount)
+        default_category = suggest_category(description, amount_value)
+        self._print_category_options(default_category)
+        category_input = input(
+            f"Kategorie-Key [{default_category} - {CATEGORY_LABELS[default_category]}]: "
+        ).strip()
+        category = normalize_category(category_input or default_category, amount_value, description)
         try:
             self.storage.add_transaction(
                 {"date": date, "description": description, "amount": amount, "category": category}
@@ -82,7 +91,8 @@ class ExpenseCLI:
             return
         print("Warnungen:")
         for category, ratio in warnings.items():
-            print(f"- {category}: {ratio * 100:.0f}% des Limits verbraucht")
+            label = CATEGORY_LABELS.get(category, category)
+            print(f"- {label}: {ratio * 100:.0f}% des Limits verbraucht")
 
     def handle_csv_import(self) -> None:
         path = input("Pfad zur CSV-Datei: ").strip()
@@ -145,5 +155,21 @@ class ExpenseCLI:
         for tx in transactions:
             amount = float(tx["amount"])
             total += amount
-            print(f"{tx['date']} | {tx['description']} | {amount:8.2f} EUR | {tx['category']}")
+            label = CATEGORY_LABELS.get(tx.get("category", ""), tx.get("category", ""))
+            print(f"{tx['date']} | {tx['description']} | {amount:8.2f} EUR | {label}")
         print(f"Summe: {total:.2f} EUR")
+
+    def _print_category_options(self, default_key: str) -> None:
+        print("Verfügbare Kategorien:")
+        for category_type, cats in get_category_groups().items():
+            print(f"  {category_type.title()}:")
+            for cat in cats:
+                marker = "*" if cat.key == default_key else " "
+                print(f"    {marker} {cat.key}: {cat.label}")
+
+    def _parse_amount(self, amount: str) -> float | None:
+        candidate = amount.replace(" ", "").replace(",", ".")
+        try:
+            return float(candidate)
+        except ValueError:
+            return None

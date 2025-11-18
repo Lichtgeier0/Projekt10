@@ -18,8 +18,8 @@ def load_budget_config(config_path: Path | None = None) -> BudgetConfig:
     """Load budget settings from disk or fall back to defaults."""
     # TODO: Add JSON/YAML/env parsing once format is defined
     default_limits = {
-        "Lebensmittel": 300.0,
-        "Miete": 800.0,
-        "Transport": 120.0,
+        "EXP_GROCERIES": 350.0,
+        "EXP_HOUSING": 900.0,
+        "EXP_MOBILITY": 150.0,
     }
     return BudgetConfig(category_limits=default_limits)

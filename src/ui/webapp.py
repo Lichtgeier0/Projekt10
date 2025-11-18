@@ -12,6 +12,7 @@ from uuid import uuid4
 from src.data_access.import_agent import parse_statement
 from src.data_access.storage import ExpenseStorage
 from src.visualization.charts import ChartService
+from src.utils.categories import get_category_groups, get_category_labels
 
 template_dir = Path(__file__).resolve().parent / "templates"
 app = Flask(__name__, template_folder=str(template_dir))
@@ -19,6 +20,13 @@ app.secret_key = os.environ.get("EXPENSE_APP_SECRET", "dev-secret")
 storage = ExpenseStorage()
 charts = ChartService()
 _pending_imports: dict[str, list[dict[str, object]]] = {}
+CATEGORY_GROUPS = get_category_groups()
+CATEGORY_LABELS = get_category_labels()
+
+
+@app.context_processor
+def inject_category_helpers() -> dict[str, object]:
+    return {"category_groups": CATEGORY_GROUPS, "category_labels": CATEGORY_LABELS}
 
 
 @app.get("/")
