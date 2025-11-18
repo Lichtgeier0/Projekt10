@@ -34,6 +34,8 @@ class ExpenseCLI:
             elif choice == "5":
                 self.handle_csv_import()
             elif choice == "6":
+                self.handle_train_model()
+            elif choice == "7":
                 print("Bis bald!")
                 break
             else:
@@ -41,18 +43,22 @@ class ExpenseCLI:
 
     def show_menu(self) -> None:
         print("\nMenü")
-        print("1) Neue Transaktion")
+        print("1) Neue Transaktion (mit Auto-Kategorisierung)")
         print("2) Monatsübersicht")
         print("3) Diagramme generieren")
         print("4) Budget-Warnungen anzeigen")
         print("5) CSV-Import")
-        print("6) Beenden")
+        print("6) Kategorisierer trainieren")
+        print("7) Beenden")
 
     def handle_add_transaction(self) -> None:
         date = input("Datum (YYYY-MM-DD): ").strip()
         description = input("Beschreibung: ").strip()
         amount = input("Betrag (negativ = Ausgabe): ").strip()
-        category = input("Kategorie: ").strip()
+        category = input("Kategorie (leer = automatisch): ").strip()
+        if not category:
+            category = self.categorizer.predict(description)
+            print(f"Vorgeschlagene Kategorie: {category}")
         try:
             self.storage.add_transaction(
                 {"date": date, "description": description, "amount": amount, "category": category}
@@ -82,10 +88,17 @@ class ExpenseCLI:
         path = input("Pfad zur CSV-Datei: ").strip()
         mapping = self._prompt_column_mapping()
         try:
-            count = self.storage.import_csv(Path(path), mapping)
-            print(f"CSV importiert. {count} neue Transaktionen hinzugefügt.")
+            report = self.storage.import_csv(Path(path), mapping)
         except (ValueError, FileNotFoundError) as exc:
             print(f"Import fehlgeschlagen: {exc}")
+            return
+        print(f"{report.new_records} neue Transaktionen importiert.")
+        if report.duplicates:
+            print(f"{report.duplicates} Duplikate übersprungen.")
+        if report.errors:
+            print("Fehlerhafte Zeilen:")
+            for message in report.errors:
+                print(f"- {message}")
 
     def handle_charts(self) -> None:
         transactions = self.storage.list_transactions()
@@ -102,6 +115,21 @@ class ExpenseCLI:
             return
         for name, path in result.items():
             print(f"{name.replace('_', ' ').title()}: {path}")
+
+    def handle_train_model(self) -> None:
+        transactions = self.storage.list_transactions()
+        if not transactions:
+            print("Keine Trainingsdaten vorhanden.")
+            return
+        try:
+            self.categorizer.train(transactions)
+        except RuntimeError as exc:
+            print(f"Training fehlgeschlagen: {exc}")
+            return
+        except ValueError as exc:
+            print(f"Training nicht möglich: {exc}")
+            return
+        print("Kategorisierer aktualisiert.")
 
     def _prompt_column_mapping(self) -> Optional[Dict[str, str]]:
         print("Optional: Spaltennamen angeben (Enter für Standard).")

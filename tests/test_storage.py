@@ -2,9 +2,7 @@
 
 from pathlib import Path
 
-import pytest
-
-from src.data_access.storage import ExpenseStorage
+from src.data_access.storage import ExpenseStorage, ImportReport
 from src.utils.config import BudgetConfig
 
 
@@ -39,13 +37,17 @@ def test_import_csv_with_mapping_and_dedup(tmp_path: Path) -> None:
     csv_path.write_text(
         "Datum,Text,Betrag,Kategorie\n"
         "2025-02-03,Supermarkt,-20,Lebensmittel\n"
-        "2025-02-03,Supermarkt,-20,Lebensmittel\n",
+        "2025-02-03,Supermarkt,-20,Lebensmittel\n"
+        "2025-02-04,Supermarkt,abc,Lebensmittel\n",
         encoding="utf-8",
     )
-    count = storage.import_csv(
+    report = storage.import_csv(
         csv_path,
         {"date": "Datum", "description": "Text", "amount": "Betrag", "category": "Kategorie"},
     )
-    assert count == 1
+    assert isinstance(report, ImportReport)
+    assert report.new_records == 1
+    assert report.duplicates == 1
+    assert len(report.errors) == 1
     results = storage.list_transactions("2025-02")
     assert len(results) == 1

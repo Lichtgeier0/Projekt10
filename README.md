@@ -15,6 +15,7 @@ Python-Anwendung für das Modul „Programmierung für KI“ (WS 2025/26, FH Sü
 | `tests/` | Pytest-Suite |
 | `data/` | Beispiel- und Arbeitsdaten (nicht eingecheckt) |
 | `docs/`, `docs/plots/`, `notebooks/`, `prompts/` | Dokumentation, Diagramme, Experimente und Prompt-Sammlung |
+| `data/models/` | Persistierte ML-Modelle (z. B. Kategorisierer) |
 
 ## Installation
 ```bash
@@ -27,18 +28,18 @@ pip install -r requirements.txt
 
 ## Nutzung
 ```bash
-# CLI-Demo (Transaktionen, Monatsübersicht, Diagramme, Budget-Warnungen, CSV-Import)
+# CLI-Demo (Transaktionen, Monatsübersicht, Diagramme, Budget, CSV-Import, Modell-Training)
 python -m src.main  # oder python src/main.py
 
-# Flask-UI via main.py (Form zum Hinzufügen, Tabelle + Warnungen, Live-Updates)
+# Flask-UI via main.py (Form zum Hinzufügen, Tabelle + Warnungen, Chart-Button)
 python -m src.main --ui flask --debug
 
 # Flask-UI direkt über flask (alternativ)
 export FLASK_APP=src.ui.webapp
 flask run --debug
 ```
-- CLI-Menü unterstützt CSV-Import mit Spalten-Mapping, erstellt Matplotlib-Diagramme (PNG in `docs/plots/`) und prüft Budgetlimits.
-- Flask-UI enthält ein Formular zum Hinzufügen von Transaktionen, nutzt `/api/transactions` & `/api/warnings` für Live-Updates.
+- CLI-Menü unterstützt CSV-Import inkl. Spalten-Mapping + Duplikat-/Fehlerreporting, erstellt Matplotlib-Diagramme (PNG in `docs/plots/`), prüft Budgetlimits und trainiert den scikit-learn-Kategorisierer auf Knopfdruck.
+- Flask-UI enthält Formular + Live-Updates über `/api/transactions`, `/api/warnings` und `/api/charts`; Diagramme werden inline als PNG gerendert.
 
 ## Entwicklung & Tests
 - Branch-Strategie: `main` stabil, Feature-Branches nach Muster `feature/<thema>`. Optional `dev` als Integrationsbranch.

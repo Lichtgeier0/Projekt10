@@ -211,3 +211,7 @@ data/
 *.sqlite
 *.sqlite3
 .DS_Store
+!data/.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/models/.gitkeep

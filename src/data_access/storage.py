@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import csv
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from src.utils.config import BudgetConfig, load_budget_config
 
@@ -16,6 +17,15 @@ SAMPLE_TRANSACTIONS = (
     {"date": "2025-01-10", "description": "Gehalt", "amount": "2500.00", "category": "Einnahmen"},
     {"date": "2025-01-18", "description": "Miete", "amount": "-820.00", "category": "Miete"},
 )
+
+
+@dataclass
+class ImportReport:
+    """Details about a CSV import."""
+
+    new_records: int
+    duplicates: int
+    errors: List[str]
 
 
 class ExpenseStorage:
@@ -48,26 +58,33 @@ class ExpenseStorage:
             rows = [row for row in rows if row["date"].startswith(month)]
         return rows
 
-    def import_csv(self, csv_path: Path, column_mapping: Dict[str, str] | None = None) -> int:
+    def import_csv(self, csv_path: Path, column_mapping: Dict[str, str] | None = None) -> ImportReport:
         """Bulk import transactions from a CSV bank statement."""
         if not csv_path.exists():
             raise FileNotFoundError(csv_path)
+        report = ImportReport(new_records=0, duplicates=0, errors=[])
         new_rows = []
         existing_keys = self._get_existing_keys()
         with csv_path.open("r", encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)
             mapping = self._build_mapping(reader.fieldnames or [], column_mapping or {})
-            for row in reader:
-                mapped = {field: row[mapping[field]] for field in CSV_FIELDS}
-                normalized = self._normalize_transaction(mapped)
+            for idx, row in enumerate(reader, start=2):  # header is line 1
+                try:
+                    mapped = {field: row[mapping[field]] for field in CSV_FIELDS}
+                    normalized = self._normalize_transaction(mapped)
+                except ValueError as exc:
+                    report.errors.append(f"Zeile {idx}: {exc}")
+                    continue
                 key = self._transaction_key(normalized)
                 if key in existing_keys:
+                    report.duplicates += 1
                     continue
                 existing_keys.add(key)
                 new_rows.append(normalized)
         if new_rows:
             self._append_rows(new_rows)
-        return len(new_rows)
+        report.new_records = len(new_rows)
+        return report
 
     def check_budget_limits(self) -> Dict[str, float]:
         """Compare totals with configured budget limits and return overruns."""
@@ -164,19 +181,21 @@ class ExpenseStorage:
                 rows.append(parsed)
             return rows
 
-    def _get_existing_keys(self) -> set[tuple[str, str, float]]:
-        keys: set[tuple[str, str, float]] = set()
+    def _get_existing_keys(self) -> Set[Tuple[str, str, float]]:
+        keys: Set[Tuple[str, str, float]] = set()
         for row in self._read_rows():
             keys.add(self._transaction_key(row))
         return keys
 
-    def _transaction_key(self, row: Dict[str, Any]) -> tuple[str, str, float]:
+    def _transaction_key(self, row: Dict[str, Any]) -> Tuple[str, str, float]:
         return (
             str(row["date"]),
             str(row["description"]).strip().lower(),
             round(float(row["amount"]), 2),
         )
 
-    def _is_duplicate(self, tx: Dict[str, Any]) -> bool:
+    def _is_duplicate(self, tx: Dict[str, Any], existing_keys: Optional[Set[Tuple[str, str, float]]] = None) -> bool:
         key = self._transaction_key(tx)
-        return key in self._get_existing_keys()
+        if existing_keys is None:
+            existing_keys = self._get_existing_keys()
+        return key in existing_keys
