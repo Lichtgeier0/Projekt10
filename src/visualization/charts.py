@@ -7,6 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List
 
+import matplotlib
+
+# nicht-interaktives Backend für Server / CLI
+matplotlib.use("Agg")
+
+from matplotlib import pyplot as plt
+
 
 class ChartService:
     """Generates static charts for summaries using matplotlib."""
@@ -14,10 +21,6 @@ class ChartService:
     def __init__(self, output_dir: Path | None = None) -> None:
         self.output_dir = output_dir or Path("docs/plots")
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            import matplotlib.pyplot as plt
-        except ModuleNotFoundError:  # pragma: no cover - environment dependent
-            plt = None
         self._plt = plt
 
     def plot_monthly_summary(self, transactions: Iterable[Dict[str, float]]) -> Path:
