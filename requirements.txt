@@ -1,0 +1,8 @@
+pandas
+matplotlib
+plotly
+scikit-learn
+streamlit
+tabulate
+pytest
+python-dotenv
