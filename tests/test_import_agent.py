@@ -61,6 +61,33 @@ def test_parse_statement_pdf_with_fake_pdfplumber(monkeypatch) -> None:
     assert result[0]["category"] == "EXP_GROCERIES"
 
 
+def test_parse_statement_pdf_text_fallback(monkeypatch) -> None:
+    class FakePage:
+        def extract_table(self):
+            return None
+
+        def extract_text(self):
+            return "03.06.2025 Bonus 1200,00"
+
+    class FakePDF:
+        def __enter__(self):
+            self.pages = [FakePage()]
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class FakeModule:
+        @staticmethod
+        def open(_):
+            return FakePDF()
+
+    monkeypatch.setattr(import_agent, "_load_pdfplumber", lambda: FakeModule())
+    result = import_agent.parse_statement(b"pdf-bytes", "konto.pdf")
+    assert len(result) == 1
+    assert result[0]["category"] == "INCOME_SALARY"
+
+
 def test_parse_statement_image_with_fake_ocr(monkeypatch) -> None:
     class DummyImage:
         def __enter__(self):

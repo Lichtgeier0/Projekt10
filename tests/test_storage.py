@@ -53,3 +53,13 @@ def test_import_csv_with_mapping_and_dedup(tmp_path: Path) -> None:
     results = storage.list_transactions("2025-02")
     assert len(results) == 1
     assert results[0]["category"] == "EXP_GROCERIES"
+
+
+def test_clear_all_removes_transactions(tmp_path: Path) -> None:
+    storage = make_storage(tmp_path)
+    storage.add_transaction(
+        {"date": "2025-02-01", "description": "Test", "amount": -10, "category": "Lebensmittel"}
+    )
+    assert storage.list_transactions()
+    storage.clear_all()
+    assert storage.list_transactions() == []

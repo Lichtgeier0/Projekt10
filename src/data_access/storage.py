@@ -161,6 +161,10 @@ class ExpenseStorage:
         report.new_records = len(new_rows)
         return report
 
+    def clear_all(self) -> None:
+        """Remove all stored transactions while keeping the header."""
+        self._write_rows([], include_header=True)
+
     def check_budget_limits(self) -> Dict[str, float]:
         """Compare totals with configured budget limits and return overruns."""
         totals: dict[str, float] = defaultdict(float)

@@ -6,7 +6,7 @@ import csv
 import io
 import re
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Tuple, Set
 
 from src.data_access.storage import (
     CSV_FIELDS,
@@ -15,21 +15,19 @@ from src.data_access.storage import (
 )
 
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
-LINE_PATTERN = re.compile(
-    r"(?P<date>\d{2}[./-]\d{2}[./-]\d{4}).*?(?P<amount>-?\d+[.,]\d{2})",
-    re.IGNORECASE,
-)
+DATE_PATTERN = re.compile(r"\d{2}[./-]\d{2}[./-]\d{2,4}")
+AMOUNT_PATTERN = re.compile(r"-?\d+[.,]\d{2}")
 
 
 def parse_statement(file_bytes: bytes, filename: str) -> List[Dict[str, object]]:
     """Parse account statements based on file extension."""
     suffix = Path(filename or "").suffix.lower()
     if suffix == ".csv":
-        return _parse_csv(file_bytes)
+        return _deduplicate_transactions(_parse_csv(file_bytes))
     if suffix == ".pdf":
-        return _parse_pdf(file_bytes)
+        return _deduplicate_transactions(_parse_pdf(file_bytes))
     if suffix in SUPPORTED_IMAGE_EXTENSIONS:
-        return _parse_image(file_bytes, filename)
+        return _deduplicate_transactions(_parse_image(file_bytes, filename))
     return []
 
 
@@ -65,26 +63,33 @@ def _parse_pdf(file_bytes: bytes) -> List[Dict[str, object]]:
     transactions: List[Dict[str, object]] = []
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
         for page in pdf.pages:
+            extracted = False
             table = page.extract_table()
-            if not table or len(table) < 2:
-                continue
-            headers = [
-                (str(cell).strip() if cell else f"Spalte{idx}") for idx, cell in enumerate(table[0])
-            ]
-            try:
-                mapping = build_column_mapping(headers, {})
-            except ValueError:
-                continue
-            for row in table[1:]:
-                row_dict = {
-                    headers[idx]: (row[idx] if idx < len(row) else "")
-                    for idx in range(len(headers))
-                }
-                payload = {field: row_dict.get(mapping[field], "") for field in CSV_FIELDS}
-                normalized = _normalize_row(payload)
-                if normalized is None:
-                    continue
-                transactions.append(_to_public_dict(normalized))
+            if table and len(table) >= 2:
+                headers = [
+                    (str(cell).strip() if cell else f"Spalte{idx}")
+                    for idx, cell in enumerate(table[0])
+                ]
+                try:
+                    mapping = build_column_mapping(headers, {})
+                except ValueError:
+                    mapping = None
+                if mapping:
+                    for row in table[1:]:
+                        row_dict = {
+                            headers[idx]: (row[idx] if idx < len(row) else "")
+                            for idx in range(len(headers))
+                        }
+                        payload = {field: row_dict.get(mapping[field], "") for field in CSV_FIELDS}
+                        normalized = _normalize_row(payload)
+                        if normalized is None:
+                            continue
+                        transactions.append(_to_public_dict(normalized))
+                        extracted = True
+            if not extracted:
+                text = page.extract_text() or ""
+                if text:
+                    transactions.extend(_transactions_from_text(text.splitlines()))
     return transactions
 
 
@@ -101,20 +106,29 @@ def _parse_image(file_bytes: bytes, filename: str) -> List[Dict[str, object]]:
 def _transactions_from_text(lines: Iterable[str]) -> List[Dict[str, object]]:
     """Extract transactions from OCR text lines."""
     transactions: List[Dict[str, object]] = []
-    for line in lines:
-        match = LINE_PATTERN.search(line)
-        if not match:
+    last_date: str | None = None
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        date_match = DATE_PATTERN.search(line)
+        if date_match:
+            last_date = date_match.group()
+        amount_matches = list(AMOUNT_PATTERN.finditer(line))
+        if not amount_matches:
+            continue
+        amount_match = amount_matches[-1]
+        date_value = date_match.group() if date_match else last_date
+        if not date_value:
             continue
         description = line
-        for token in (match.group("date"), match.group("amount")):
+        for token in filter(None, [date_match.group() if date_match else None, amount_match.group()]):
             description = description.replace(token, "")
-        description = description.strip(" ;|-")
-        if not description:
-            description = "Beleg"
+        description = description.strip(" ;|-") or "Beleg"
         raw = {
-            "date": match.group("date"),
+            "date": date_value,
             "description": description,
-            "amount": match.group("amount"),
+            "amount": amount_match.group(),
             "category": "Unbekannt",
         }
         normalized = _normalize_row(raw)
@@ -138,6 +152,18 @@ def _to_public_dict(normalized: Dict[str, str]) -> Dict[str, object]:
         "amount": float(normalized["amount"]),
         "category": normalized.get("category") or "Unbekannt",
     }
+
+
+def _deduplicate_transactions(transactions: List[Dict[str, object]]) -> List[Dict[str, object]]:
+    seen: Set[Tuple[str, str, float]] = set()
+    unique: List[Dict[str, object]] = []
+    for tx in transactions:
+        key = (tx.get("date", ""), tx.get("description", ""), round(float(tx.get("amount", 0)), 2))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(tx)
+    return unique
 
 
 def _load_pdfplumber():

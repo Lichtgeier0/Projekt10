@@ -140,5 +140,14 @@ def confirm_import():
     return redirect(url_for("index"))
 
 
+@app.post("/clear_transactions")
+def clear_transactions() -> str:
+    """Clear all stored transactions."""
+    storage.clear_all()
+    _pending_imports.clear()
+    flash("Alle Transaktionen wurden gelöscht.")
+    return redirect(url_for("index"))
+
+
 if __name__ == "__main__":
     app.run(debug=True)

@@ -10,6 +10,11 @@
       label { display: flex; flex-direction: column; font-weight: 600; }
       input { padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; }
       button { padding: 0.6rem 1rem; border: none; background: #2c3e50; color: #fff; border-radius: 4px; cursor: pointer; }
+      button.danger { background: #c0392b; }
+      .actions { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+      .inline-form { margin: 0; display: inline; background: transparent; padding: 0; max-width: none; }
+      .inline-form button { margin: 0; }
+      .link-button { display: inline-flex; align-items: center; padding: 0.6rem 1rem; background: #2c3e50; color: #fff; border-radius: 4px; text-decoration: none; }
       table { border-collapse: collapse; width: 100%; margin-top: 1rem; background: #fff; border-radius: 8px; overflow: hidden; }
       th, td { border: 1px solid #e1e1e1; padding: 0.5rem; text-align: left; }
       th { background: #f0f0f0; }
@@ -23,7 +28,13 @@
   </head>
   <body>
     <h1>Persönlicher Ausgaben-Manager</h1>
-    <p><a href="{{ url_for('upload_statement_form') }}">Kontoauszug hochladen</a></p>
+    <div class="actions">
+      <a href="{{ url_for('upload_statement_form') }}" class="link-button">Kontoauszug hochladen</a>
+      <form action="{{ url_for('clear_transactions') }}" method="post" class="inline-form"
+            onsubmit="return confirm('Alle Transaktionen wirklich löschen?');">
+        <button type="submit" class="danger">Alle Daten löschen</button>
+      </form>
+    </div>
     {% with messages = get_flashed_messages() %}
       {% if messages %}
         <div class="warnings">

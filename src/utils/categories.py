@@ -44,6 +44,7 @@ CATEGORY_SYNONYMS: Dict[str, str] = {
     "zinsen": "INCOME_CAPITAL",
     "erstattung": "INCOME_REFUNDS",
     "rückzahlung": "INCOME_REFUNDS",
+    "bonus": "INCOME_SALARY",
     "sonstige einnahmen": "INCOME_OTHER",
     "wohnen": "EXP_HOUSING",
     "miete": "EXP_HOUSING",
@@ -78,6 +79,7 @@ KEYWORD_MAP: Dict[str, str] = {
     "zins": "INCOME_CAPITAL",
     "erstattung": "INCOME_REFUNDS",
     "rückzahlung": "INCOME_REFUNDS",
+    "bonus": "INCOME_SALARY",
     "miete": "EXP_HOUSING",
     "strom": "EXP_HOUSING",
     "gas": "EXP_HOUSING",
@@ -125,13 +127,15 @@ def normalize_category(raw: str | None, amount: float | None, description: str |
     """Normalize arbitrary text input to a supported category key."""
     key_candidate: str | None = None
     if raw:
-        candidate = raw.strip().upper()
-        if candidate in CATEGORY_BY_KEY:
-            key_candidate = candidate
-        else:
-            lowered = raw.strip().lower()
-            if lowered in CATEGORY_SYNONYMS:
-                key_candidate = CATEGORY_SYNONYMS[lowered]
+        stripped = raw.strip()
+        if stripped.lower() not in {"", "unbekannt", "unknown"}:
+            candidate = stripped.upper()
+            if candidate in CATEGORY_BY_KEY:
+                key_candidate = candidate
+            else:
+                lowered = stripped.lower()
+                if lowered in CATEGORY_SYNONYMS:
+                    key_candidate = CATEGORY_SYNONYMS[lowered]
     suggestion = suggest_category(description, amount)
     if key_candidate:
         if key_candidate in {"INCOME_OTHER", "EXP_OTHER"} and suggestion:
