@@ -25,15 +25,20 @@ class ExpenseStorage:
         self,
         csv_path: Path | None = None,
         budget_config: BudgetConfig | None = None,
+        *,
+        seed_with_samples: bool = True,
     ) -> None:
         self.csv_path = csv_path or Path("data/processed/transactions.csv")
         self.budget_config = budget_config or load_budget_config()
         self.csv_path.parent.mkdir(parents=True, exist_ok=True)
-        self._ensure_csv_exists()
+        if seed_with_samples:
+            self._ensure_csv_exists()
 
     def add_transaction(self, tx: Dict[str, Any]) -> None:
         """Persist a new transaction record."""
         normalized = self._normalize_transaction(tx)
+        if self._is_duplicate(normalized):
+            raise ValueError("Transaktion existiert bereits (Datum+Beschreibung+Betrag).")
         self._append_rows([normalized])
 
     def list_transactions(self, month: str | None = None) -> List[Dict[str, Any]]:
@@ -43,20 +48,26 @@ class ExpenseStorage:
             rows = [row for row in rows if row["date"].startswith(month)]
         return rows
 
-    def import_csv(self, csv_path: Path) -> None:
+    def import_csv(self, csv_path: Path, column_mapping: Dict[str, str] | None = None) -> int:
         """Bulk import transactions from a CSV bank statement."""
         if not csv_path.exists():
             raise FileNotFoundError(csv_path)
         new_rows = []
+        existing_keys = self._get_existing_keys()
         with csv_path.open("r", encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)
-            missing = [field for field in CSV_FIELDS if field not in reader.fieldnames]
-            if missing:
-                raise ValueError(f"CSV fehlt Spalten: {', '.join(missing)}")
+            mapping = self._build_mapping(reader.fieldnames or [], column_mapping or {})
             for row in reader:
-                new_rows.append(self._normalize_transaction(row))
+                mapped = {field: row[mapping[field]] for field in CSV_FIELDS}
+                normalized = self._normalize_transaction(mapped)
+                key = self._transaction_key(normalized)
+                if key in existing_keys:
+                    continue
+                existing_keys.add(key)
+                new_rows.append(normalized)
         if new_rows:
             self._append_rows(new_rows)
+        return len(new_rows)
 
     def check_budget_limits(self) -> Dict[str, float]:
         """Compare totals with configured budget limits and return overruns."""
@@ -83,6 +94,17 @@ class ExpenseStorage:
         if self.csv_path.exists():
             return
         self._write_rows(SAMPLE_TRANSACTIONS, include_header=True)
+
+    def _build_mapping(self, headers: List[str], overrides: Dict[str, str]) -> Dict[str, str]:
+        normalized_headers = {h.lower(): h for h in headers}
+        mapping: Dict[str, str] = {}
+        for field in CSV_FIELDS:
+            source = overrides.get(field, field)
+            lookup = source.lower()
+            if lookup not in normalized_headers:
+                raise ValueError(f"CSV fehlt Spalte '{source}' für Feld '{field}'")
+            mapping[field] = normalized_headers[lookup]
+        return mapping
 
     def _normalize_transaction(self, tx: Dict[str, Any]) -> Dict[str, str]:
         normalized: Dict[str, str] = {}
@@ -141,3 +163,20 @@ class ExpenseStorage:
                 parsed["amount"] = float(parsed["amount"])
                 rows.append(parsed)
             return rows
+
+    def _get_existing_keys(self) -> set[tuple[str, str, float]]:
+        keys: set[tuple[str, str, float]] = set()
+        for row in self._read_rows():
+            keys.add(self._transaction_key(row))
+        return keys
+
+    def _transaction_key(self, row: Dict[str, Any]) -> tuple[str, str, float]:
+        return (
+            str(row["date"]),
+            str(row["description"]).strip().lower(),
+            round(float(row["amount"]), 2),
+        )
+
+    def _is_duplicate(self, tx: Dict[str, Any]) -> bool:
+        key = self._transaction_key(tx)
+        return key in self._get_existing_keys()

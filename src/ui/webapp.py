@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 from src.data_access.storage import ExpenseStorage
 
@@ -26,6 +26,30 @@ def list_transactions() -> tuple[list[dict[str, object]], int]:
     """Return stored transactions as JSON."""
     transactions = storage.list_transactions()
     return jsonify(transactions), 200
+
+
+@app.post("/api/transactions")
+def create_transaction() -> tuple[dict[str, str], int]:
+    """Create a transaction from JSON payload."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        storage.add_transaction(
+            {
+                "date": payload["date"],
+                "description": payload["description"],
+                "amount": payload["amount"],
+                "category": payload["category"],
+            }
+        )
+    except (KeyError, ValueError) as exc:
+        return {"error": str(exc)}, 400
+    return {"status": "ok"}, 201
+
+
+@app.get("/api/warnings")
+def budget_warnings() -> tuple[dict[str, float], int]:
+    """Expose budget warnings as JSON for the frontend."""
+    return jsonify(storage.check_budget_limits()), 200
 
 
 if __name__ == "__main__":

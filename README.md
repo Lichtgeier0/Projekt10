@@ -14,7 +14,7 @@ Python-Anwendung für das Modul „Programmierung für KI“ (WS 2025/26, FH Sü
 | `src/utils/config.py` | Zentrale Konfiguration und Budgetlimits |
 | `tests/` | Pytest-Suite |
 | `data/` | Beispiel- und Arbeitsdaten (nicht eingecheckt) |
-| `docs/`, `notebooks/`, `prompts/` | Dokumentation, Experimente und Prompt-Sammlung |
+| `docs/`, `docs/plots/`, `notebooks/`, `prompts/` | Dokumentation, Diagramme, Experimente und Prompt-Sammlung |
 
 ## Installation
 ```bash
@@ -27,18 +27,18 @@ pip install -r requirements.txt
 
 ## Nutzung
 ```bash
-# CLI-Demo (Transaktionen hinzufügen, Monatsübersicht, Budget-Warnungen)
+# CLI-Demo (Transaktionen, Monatsübersicht, Diagramme, Budget-Warnungen, CSV-Import)
 python -m src.main  # oder python src/main.py
 
-# Flask-Placeholder via main.py (liefert Tabelle + Warnungen)
+# Flask-UI via main.py (Form zum Hinzufügen, Tabelle + Warnungen, Live-Updates)
 python -m src.main --ui flask --debug
 
-# Flask-Placeholder (direkt über flask, alternativ)
+# Flask-UI direkt über flask (alternativ)
 export FLASK_APP=src.ui.webapp
 flask run --debug
 ```
-- CLI-Menü zeigt Platzhalter für Transaktionen, Monatsübersicht, CSV-Import und Diagramme.
-- Flask-UI liefert eine minimalistische Weboberfläche, die später durch Streamlit/Flask-Views ersetzt wird.
+- CLI-Menü unterstützt CSV-Import mit Spalten-Mapping, erstellt Matplotlib-Diagramme (PNG in `docs/plots/`) und prüft Budgetlimits.
+- Flask-UI enthält ein Formular zum Hinzufügen von Transaktionen, nutzt `/api/transactions` & `/api/warnings` für Live-Updates.
 
 ## Entwicklung & Tests
 - Branch-Strategie: `main` stabil, Feature-Branches nach Muster `feature/<thema>`. Optional `dev` als Integrationsbranch.
