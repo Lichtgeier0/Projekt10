@@ -3,6 +3,7 @@ matplotlib
 plotly
 scikit-learn
 streamlit
+flask
 tabulate
 pytest
 python-dotenv

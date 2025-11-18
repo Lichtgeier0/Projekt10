@@ -10,6 +10,22 @@
       "env": {
         "EXPENSE_DB": "${workspaceFolder}/data/processed/expenses.sqlite"
       }
+    },
+    {
+      "name": "Run Flask UI",
+      "type": "python",
+      "request": "launch",
+      "module": "flask",
+      "console": "integratedTerminal",
+      "env": {
+        "FLASK_APP": "src.ui.webapp",
+        "FLASK_ENV": "development",
+        "EXPENSE_DB": "${workspaceFolder}/data/processed/expenses.sqlite"
+      },
+      "args": [
+        "run",
+        "--debug"
+      ]
     }
   ]
 }

@@ -27,10 +27,18 @@ pip install -r requirements.txt
 
 ## Nutzung
 ```bash
-python src/main.py
+# CLI-Demo (Transaktionen hinzufügen, Monatsübersicht, Budget-Warnungen)
+python -m src.main  # oder python src/main.py
+
+# Flask-Placeholder via main.py (liefert Tabelle + Warnungen)
+python -m src.main --ui flask --debug
+
+# Flask-Placeholder (direkt über flask, alternativ)
+export FLASK_APP=src.ui.webapp
+flask run --debug
 ```
-- Menü zeigt Platzhalter für Transaktionen, Monatsübersicht, CSV-Import und Diagramme.
-- UI-Alternativen (Streamlit/Flask) werden später ergänzt und hier dokumentiert.
+- CLI-Menü zeigt Platzhalter für Transaktionen, Monatsübersicht, CSV-Import und Diagramme.
+- Flask-UI liefert eine minimalistische Weboberfläche, die später durch Streamlit/Flask-Views ersetzt wird.
 
 ## Entwicklung & Tests
 - Branch-Strategie: `main` stabil, Feature-Branches nach Muster `feature/<thema>`. Optional `dev` als Integrationsbranch.
@@ -49,4 +57,4 @@ Bei der Entwicklung wurden Tools wie GitHub Copilot und ChatGPT/Codex zur Ideeng
 - Budgetlimits + Warnmeldungen
 - Matplotlib/Plotly-Visualisierung
 - Automatische Kategorisierung mit scikit-learn
-- Optional: Streamlit- oder Flask-UI
+- Optional: Streamlit- oder erweiterte Flask-UI

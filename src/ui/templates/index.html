@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Persönlicher Ausgaben-Manager</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 2rem; }
+      table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+      th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+      th { background: #f0f0f0; }
+      .negative { color: #c0392b; }
+      .positive { color: #27ae60; }
+      .warnings { margin-top: 1.5rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffeeba; }
+    </style>
+  </head>
+  <body>
+    <h1>Persönlicher Ausgaben-Manager</h1>
+    <p>Aktuelle Transaktionen (CSV-Quelle)</p>
+
+    {% if transactions %}
+      <table>
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Beschreibung</th>
+            <th>Betrag</th>
+            <th>Kategorie</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tx in transactions %}
+            <tr>
+              <td>{{ tx.date }}</td>
+              <td>{{ tx.description }}</td>
+              <td class="{% if tx.amount < 0 %}negative{% else %}positive{% endif %}">{{ '%.2f'|format(tx.amount) }} €</td>
+              <td>{{ tx.category }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>Noch keine Transaktionen vorhanden.</p>
+    {% endif %}
+
+    {% if warnings %}
+      <div class="warnings">
+        <strong>Budget-Warnungen</strong>
+        <ul>
+          {% for category, ratio in warnings.items() %}
+            <li>{{ category }}: {{ (ratio * 100) | round(0) }}% des Limits verbraucht</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </body>
+</html>
