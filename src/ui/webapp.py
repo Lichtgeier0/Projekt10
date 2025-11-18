@@ -98,7 +98,11 @@ def handle_upload_statement():
     if file is None or not file.filename:
         flash("Bitte eine Datei auswählen.")
         return redirect(url_for("upload_statement_form"))
-    transactions = parse_statement(file.read(), file.filename)
+    try:
+        transactions = parse_statement(file.read(), file.filename)
+    except ValueError as exc:
+        flash(str(exc))
+        return redirect(url_for("upload_statement_form"))
     if not transactions:
         flash("Keine gültigen Transaktionen im Upload erkannt.")
         return redirect(url_for("upload_statement_form"))

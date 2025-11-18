@@ -39,7 +39,7 @@ export FLASK_APP=src.ui.webapp
 flask run --debug
 ```
 - CLI-Menü unterstützt CSV-Import inkl. Spalten-Mapping + Duplikat-/Fehlerreporting, erstellt Matplotlib-Diagramme (PNG in `docs/plots/`), prüft Budgetlimits und trainiert den scikit-learn-Kategorisierer auf Knopfdruck.
-- Flask-UI enthält Formular + Live-Updates über `/api/transactions`, `/api/warnings` und `/api/charts`; Diagramme werden inline als PNG gerendert. Über `/upload_statement` lassen sich Kontoauszüge hochladen, überprüfen und übernehmen (CSV produktiv, PDF via `pdfplumber`, Bild/OCR via `pytesseract` inkl. Heuristik für unstrukturierte Texte). Manuelle und automatische Erfassung nutzt feste Kategorien mit Dropdown-Vorauswahl; ein Button „Alle Daten löschen“ leert das lokale CSV.
+- Flask-UI enthält Formular + Live-Updates über `/api/transactions`, `/api/warnings` und `/api/charts`; Diagramme werden inline als PNG gerendert. Über `/upload_statement` lassen sich Kontoauszüge hochladen, überprüfen und übernehmen (CSV-Parser erkennt automatisch Delimiter/Spalten, PDF via `pdfplumber`, Bild/OCR via `pytesseract` inkl. Heuristik für unstrukturierte Texte). Manuelle und automatische Erfassung nutzt feste Kategorien mit Dropdown-Vorauswahl; ein Button „Alle Daten löschen“ leert das lokale CSV.
 
 > Hinweis: Für Bildimporte wird zusätzlich ein lokales [Tesseract-OCR](https://tesseract-ocr.github.io/) benötigt.
 

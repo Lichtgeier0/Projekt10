@@ -8,11 +8,7 @@ import re
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple, Set
 
-from src.data_access.storage import (
-    CSV_FIELDS,
-    build_column_mapping,
-    normalize_transaction_dict,
-)
+from src.data_access.storage import CSV_FIELDS, normalize_transaction_dict
 
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 DATE_PATTERN = re.compile(r"\d{2}[./-]\d{2}[./-]\d{2,4}")
@@ -34,21 +30,39 @@ def parse_statement(file_bytes: bytes, filename: str) -> List[Dict[str, object]]
 def _parse_csv(file_bytes: bytes) -> List[Dict[str, object]]:
     """Parse CSV statements, returning normalized transaction dicts."""
     text = file_bytes.decode("utf-8", errors="ignore")
-    readers = [
-        csv.DictReader(io.StringIO(text), delimiter=";"),
-        csv.DictReader(io.StringIO(text), delimiter=","),
-    ]
-    reader = next((r for r in readers if r.fieldnames and len(r.fieldnames) > 1), readers[0])
-    if not reader.fieldnames:
-        return []
+    buffer = io.StringIO(text)
+    sample = buffer.read(2048)
+    buffer.seek(0)
     try:
-        mapping = build_column_mapping(reader.fieldnames, {})
-    except ValueError:
-        return []
+        dialect = csv.Sniffer().sniff(sample)
+        delimiter = dialect.delimiter
+    except Exception:
+        delimiter = ";"
+    reader = csv.DictReader(buffer, delimiter=delimiter)
+    header = reader.fieldnames or []
+    if not header:
+        raise ValueError("CSV besitzt keine Kopfzeile.")
+    mapping = _detect_columns(header)
     transactions: List[Dict[str, object]] = []
     for row in reader:
-        payload = {field: row.get(mapping[field], "") for field in CSV_FIELDS}
-        normalized = _normalize_row(payload)
+        date = (row.get(mapping["date"]) or "").strip()
+        amount_raw = (row.get(mapping["amount"]) or "").strip()
+        if not date or not amount_raw:
+            continue
+        amount_normalized = amount_raw.replace(" ", "").replace(".", "").replace(",", ".")
+        try:
+            amount = float(amount_normalized)
+        except ValueError:
+            continue
+        description = (row.get(mapping["description"]) or "").strip()
+        normalized = _normalize_row(
+            {
+                "date": date,
+                "description": description,
+                "amount": amount,
+                "category": "Unbekannt",
+            }
+        )
         if normalized is None:
             continue
         transactions.append(_to_public_dict(normalized))
@@ -71,7 +85,7 @@ def _parse_pdf(file_bytes: bytes) -> List[Dict[str, object]]:
                     for idx, cell in enumerate(table[0])
                 ]
                 try:
-                    mapping = build_column_mapping(headers, {})
+                    mapping = _detect_columns(headers)
                 except ValueError:
                     mapping = None
                 if mapping:
@@ -80,7 +94,12 @@ def _parse_pdf(file_bytes: bytes) -> List[Dict[str, object]]:
                             headers[idx]: (row[idx] if idx < len(row) else "")
                             for idx in range(len(headers))
                         }
-                        payload = {field: row_dict.get(mapping[field], "") for field in CSV_FIELDS}
+                        payload = {
+                            "date": row_dict.get(mapping["date"], ""),
+                            "description": row_dict.get(mapping["description"], ""),
+                            "amount": row_dict.get(mapping["amount"], ""),
+                            "category": row_dict.get("Kategorie", "Unbekannt"),
+                        }
                         normalized = _normalize_row(payload)
                         if normalized is None:
                             continue
@@ -164,6 +183,33 @@ def _deduplicate_transactions(transactions: List[Dict[str, object]]) -> List[Dic
         seen.add(key)
         unique.append(tx)
     return unique
+
+
+POSSIBLE_DATE_COLUMNS = ["datum", "buchungstag", "valuta", "wertstellung"]
+POSSIBLE_DESC_COLUMNS = ["verwendungszweck", "buchungstext", "beschreibung", "text"]
+POSSIBLE_AMOUNT_COLUMNS = ["betrag", "umsatz", "amount"]
+
+
+def _detect_columns(header: List[str]) -> Dict[str, str]:
+    lower = [h.lower().strip() for h in header]
+
+    def find(possible: List[str]) -> str | None:
+        for candidate in possible:
+            key = candidate.lower()
+            if key in lower:
+                return header[lower.index(key)]
+        return None
+
+    date_col = find(POSSIBLE_DATE_COLUMNS)
+    desc_col = find(POSSIBLE_DESC_COLUMNS)
+    amount_col = find(POSSIBLE_AMOUNT_COLUMNS)
+
+    if not (date_col and desc_col and amount_col):
+        raise ValueError(
+            f"CSV enthält keine passenden Spalten (Datum/Betrag/Verwendungszweck). Kopfzeile: {header}"
+        )
+
+    return {"date": date_col, "description": desc_col, "amount": amount_col}
 
 
 def _load_pdfplumber():
