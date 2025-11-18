@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Expense Manager",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/main.py",
+      "console": "integratedTerminal",
+      "env": {
+        "EXPENSE_DB": "${workspaceFolder}/data/processed/expenses.sqlite"
+      }
+    }
+  ]
+}

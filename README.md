@@ -1,90 +1,52 @@
-# Projekt10
+# Persönlicher Ausgaben-Manager mit intelligenter Kategorisierung
 
-## Vision & Ziele
-Projekt10 ist eine gemeinsame Projektarbeit von Ibrahim, Abdulrahman und Endrit. Unser Ziel ist der Aufbau eines modularen Labors für KI-Experimente, das datengestützte Prototypen, Prompt-Workflows und reproduzierbare Auswertungen vereint. Die wichtigsten Leitplanken:
+Python-Anwendung für das Modul „Programmierung für KI“ (WS 2025/26, FH Südwestfalen). Das Ziel ist ein persönlicher Ausgaben-Manager, der Einnahmen/Ausgaben verwaltet, monatliche Übersichten liefert, Diagramme zeichnet, Budgetlimits überwacht und Ausgaben automatisch kategorisiert.
 
-- **Modularität** – jede Komponente (Datenaufbereitung, Modelltraining, Prompting) ist gekapselt und austauschbar.
-- **Nachvollziehbarkeit** – Konfigurationen werden versioniert, Modelle lassen sich mit identischen Ergebnissen erneut ausführen.
-- **Zusammenarbeit** – klare Ordnerstruktur, dokumentierte Prozesse und festgelegte Branch-Regeln beschleunigen Teamarbeit.
-
-Ausführliche Architektur- und Konzeptnotizen stehen in `docs/project_overview.md`.
-
-## Verzeichnisstruktur
+## Projektübersicht
 
 | Pfad | Zweck |
 | --- | --- |
-| `src/project10/` | Kernpaket mit Konfiguration, Datenlade-Logik und Experiment-Runner |
-| `src/main.py` | CLI-Einstiegspunkt, um Experimente lokal zu starten |
-| `docs/` | Architektur, Dev-Setup, Backlog & Experiment-Vorlagen |
-| `prompts/` | Sammlung verifizierter Prompts und Guidelines für KI-Assistenz |
-| `requirements.txt` | Laufzeit- und Dev-Abhängigkeiten |
+| `src/main.py` | Einstiegspunkt, startet CLI/UI |
+| `src/ui/cli.py` | Menüführung, später optional Streamlit/Flask |
+| `src/data_access/` | CSV/SQLite-Datenzugriff, Budgetfunktionen |
+| `src/categorization/` | Automatische Kategorisierung (ML-Stub) |
+| `src/visualization/` | Balken-/Kreisdiagramme mit Matplotlib/Plotly |
+| `src/utils/config.py` | Zentrale Konfiguration und Budgetlimits |
+| `tests/` | Pytest-Suite |
+| `data/` | Beispiel- und Arbeitsdaten (nicht eingecheckt) |
+| `docs/`, `notebooks/`, `prompts/` | Dokumentation, Experimente und Prompt-Sammlung |
 
 ## Installation
-1. Repository klonen oder aktualisieren.
-2. Virtuelle Umgebung anlegen:
-   ```bash
-   python -m venv .venv
-   ```
-3. Umgebung aktivieren:
-   - macOS/Linux
-     ```bash
-     source .venv/bin/activate
-     ```
-   - Windows (PowerShell)
-     ```powershell
-     .\.venv\Scripts\Activate.ps1
-     ```
-4. Abhängigkeiten installieren:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+python3 -m venv venv
+source venv/bin/activate  # macOS/Linux
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+(Unter Windows: `.\venv\Scripts\Activate.ps1`)
+
+## Nutzung
+```bash
+python src/main.py
+```
+- Menü zeigt Platzhalter für Transaktionen, Monatsübersicht, CSV-Import und Diagramme.
+- UI-Alternativen (Streamlit/Flask) werden später ergänzt und hier dokumentiert.
 
 ## Entwicklung & Tests
-- Linting & Formatierung
-  ```bash
-  ruff check src
-  black src
-  ```
-- Typsicherheit
-  ```bash
-  mypy src
-  ```
-- Testsuite
-  ```bash
-  pytest
-  ```
-Weitere Details (z. B. empfohlene VS-Code-Extensions und CI-Vorschläge) stehen in `docs/dev_setup.md`.
+- Branch-Strategie: `main` stabil, Feature-Branches nach Muster `feature/<thema>`. Optional `dev` als Integrationsbranch.
+- Tests starten mit `pytest tests`.
+- Notebooks unter `notebooks/` für Experimente, Ergebnisse ggf. in `docs/` dokumentieren.
 
-## Experimente ausführen
-Minimalbeispiel mit Standarddaten (Breast-Cancer-Datensatz aus `scikit-learn`):
+## VS-Code-Empfehlungen
+- Extensions: Python, Pylance, Jupyter, GitLens, GitHub Pull Requests, Markdown Preview Enhanced.
+- `.vscode/settings.json` definiert Interpreterpfad und aktiviert pytest; `launch.json` enthält eine Debug-Konfiguration für `src/main.py`.
 
-```bash
-python src/main.py --algorithm logistic_regression
-```
+## Hinweis zu KI-Unterstützung
+Bei der Entwicklung wurden Tools wie GitHub Copilot und ChatGPT/Codex zur Ideengenerierung und Dokumentation eingesetzt. Alle Vorschläge wurden nachvollzogen und an die Projektanforderungen angepasst.
 
-Eigene CSV-Datei nutzen:
-
-```bash
-python src/main.py \
-  --dataset data/experimente.csv \
-  --target-column label \
-  --features feature_a feature_b feature_c
-```
-
-Komplexere Szenarien können über YAML/JSON-Konfigurationsdateien gesteuert werden. Ein Beispiel befindet sich in `docs/project_overview.md`.
-
-## Zusammenarbeit
-- `main` bleibt stabil – Feature-Branches nach Muster `feature/<kurzbeschreibung>`.
-- Jede Arbeitseinheit referenziert ein Issue oder einen Task aus `docs/backlog.md`.
-- Pull-Requests enthalten Testnachweise (`pytest`) und Linter-Läufe.
-- Nutzung von KI-Assistenz ist erwünscht, Ergebnisse müssen jedoch fachlich geprüft und dokumentiert werden (siehe `prompts/setup.md`).
-
-## Geplanter Ausbau
-Kurzfristig stehen u. a. an (vollständige Liste: `docs/backlog.md`):
-
-- Erweiterung der Datenquellen (APIs, Vektordatenbanken)
-- Prompt-Metriken und automatische Reportings
-- Streamlit-Dashboard für interaktive Experimente
-- CI/CD-Pipeline mit automatischen Tests
-
-Für offene Fragen oder neue Ideen bitte im Repo als Issue dokumentieren und in den Docs verlinken.
+## Roadmap
+- CSV-Import von Kontoauszügen
+- Budgetlimits + Warnmeldungen
+- Matplotlib/Plotly-Visualisierung
+- Automatische Kategorisierung mit scikit-learn
+- Optional: Streamlit- oder Flask-UI
