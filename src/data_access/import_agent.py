@@ -29,7 +29,7 @@ def parse_statement(file_bytes: bytes, filename: str) -> List[Dict[str, object]]
 
 def _parse_csv(file_bytes: bytes) -> List[Dict[str, object]]:
     """Parse CSV statements, returning normalized transaction dicts."""
-    text = file_bytes.decode("utf-8", errors="ignore")
+    text = _decode_text(file_bytes)
     buffer = io.StringIO(text)
     sample = buffer.read(2048)
     buffer.seek(0)
@@ -37,7 +37,9 @@ def _parse_csv(file_bytes: bytes) -> List[Dict[str, object]]:
         dialect = csv.Sniffer().sniff(sample)
         delimiter = dialect.delimiter
     except Exception:
-        delimiter = ";"
+        # choose most frequent candidate delimiter if sniffing fails
+        candidates = {";": sample.count(";"), "\t": sample.count("\t"), ",": sample.count(",")}
+        delimiter = max(candidates, key=candidates.get) or ";"
     reader = csv.DictReader(buffer, delimiter=delimiter)
     header = reader.fieldnames or []
     if not header:
@@ -46,21 +48,39 @@ def _parse_csv(file_bytes: bytes) -> List[Dict[str, object]]:
     transactions: List[Dict[str, object]] = []
     for row in reader:
         date = (row.get(mapping["date"]) or "").strip()
-        amount_raw = (row.get(mapping["amount"]) or "").strip()
-        if not date or not amount_raw:
-            continue
-        amount_normalized = amount_raw.replace(" ", "").replace(".", "").replace(",", ".")
-        try:
-            amount = float(amount_normalized)
-        except ValueError:
-            continue
         description = (row.get(mapping["description"]) or "").strip()
+        raw_category = (row.get(mapping["category"]) or "").strip() if "category" in mapping else ""
+        amount: float | None = None
+
+        if "amount" in mapping:
+            amount_raw = (row.get(mapping["amount"]) or "").strip()
+            if not amount_raw:
+                continue
+            try:
+                amount = _to_float(amount_raw)
+            except ValueError:
+                continue
+        else:
+            raw_soll = (row.get(mapping.get("soll", ""), "") or "").strip()
+            raw_haben = (row.get(mapping.get("haben", ""), "") or "").strip()
+            if not (raw_soll or raw_haben):
+                continue
+            try:
+                soll_value = _to_float(raw_soll) if raw_soll else 0.0
+                haben_value = _to_float(raw_haben) if raw_haben else 0.0
+                amount = haben_value - soll_value
+            except ValueError:
+                continue
+
+        if not date or amount is None:
+            continue
+
         normalized = _normalize_row(
             {
                 "date": date,
                 "description": description,
                 "amount": amount,
-                "category": "Unbekannt",
+                "category": raw_category or "Unbekannt",
             }
         )
         if normalized is None:
@@ -186,8 +206,22 @@ def _deduplicate_transactions(transactions: List[Dict[str, object]]) -> List[Dic
 
 
 POSSIBLE_DATE_COLUMNS = ["buchungsdatum", "datum", "buchungstag", "valuta", "wertstellung"]
-POSSIBLE_DESC_COLUMNS = ["verwendungszweck", "beschreibung", "zahlungsempfänger", "buchungstext", "text"]
-POSSIBLE_AMOUNT_COLUMNS = ["betrag", "umsatz", "amount"]
+POSSIBLE_DESC_COLUMNS = [
+    "verwendungszweck",
+    "beschreibung",
+    "zahlungsempfänger",
+    "buchungstext",
+    "text",
+    "empfänger",
+    "auftraggeber",
+    "zahlungspflichtiger",
+    "merchant",
+    "karteneinsatz",
+]
+POSSIBLE_AMOUNT_COLUMNS = ["betrag", "umsatz", "amount", "belastung", "gutschrift"]
+POSSIBLE_SOLL_COLUMNS = ["soll", "debit", "lastschrift"]
+POSSIBLE_HABEN_COLUMNS = ["haben", "credit", "gutschrift", "einzahlung"]
+POSSIBLE_CATEGORY_COLUMNS = ["kategorie", "unterkategorie", "category"]
 
 
 def _detect_columns(header: List[str]) -> Dict[str, str]:
@@ -204,19 +238,31 @@ def _detect_columns(header: List[str]) -> Dict[str, str]:
     date_col = find(POSSIBLE_DATE_COLUMNS)
     desc_col = find(POSSIBLE_DESC_COLUMNS)
     amount_col = find(POSSIBLE_AMOUNT_COLUMNS)
+    soll_col = find(POSSIBLE_SOLL_COLUMNS)
+    haben_col = find(POSSIBLE_HABEN_COLUMNS)
+    category_col = find(POSSIBLE_CATEGORY_COLUMNS)
 
-    if not (date_col and desc_col and amount_col):
+    if not (date_col and desc_col and (amount_col or soll_col or haben_col)):
         raise ValueError(
-            f"CSV enthält keine passenden Spalten (Datum/Betrag/Verwendungszweck). Kopfzeile: {header}"
+            f"CSV enthält keine passenden Spalten (Datum/Betrag/Soll/Haben/Verwendungszweck). Kopfzeile: {header}"
         )
 
-    return {"date": date_col, "description": desc_col, "amount": amount_col}
+    mapping: Dict[str, str] = {"date": date_col, "description": desc_col}
+    if amount_col:
+        mapping["amount"] = amount_col
+    if soll_col:
+        mapping["soll"] = soll_col
+    if haben_col:
+        mapping["haben"] = haben_col
+    if category_col:
+        mapping["category"] = category_col
+    return mapping
 
 
 def _normalize_header_cell(cell: str | None) -> str:
     if cell is None:
         return ""
-    return cell.replace("\ufeff", "").strip()
+    return cell.replace("\ufeff", "").replace("\u00a0", " ").strip()
 
 
 def _load_pdfplumber():
@@ -234,3 +280,23 @@ def _load_image_ocr() -> Tuple[object | None, object | None]:
     except ModuleNotFoundError:
         return None, None
     return Image, pytesseract
+
+
+def _decode_text(file_bytes: bytes) -> str:
+    """Decode bytes with simple BOM detection (utf-16 / utf-8 fallback)."""
+    if file_bytes.startswith(b"\xff\xfe") or file_bytes.startswith(b"\xfe\xff"):
+        return file_bytes.decode("utf-16", errors="ignore")
+    return file_bytes.decode("utf-8", errors="ignore")
+
+
+def _to_float(value: str) -> float:
+    text = value.strip().replace("\u00a0", " ").replace("−", "-")
+    # Entferne nicht-numerische Suffixe/Prefixe (z. B. "€")
+    number_match = re.search(r"[-+−]?\d[\d.,]*", text)
+    if number_match:
+        text = number_match.group()
+    if text.count(",") == 1 and text.count(".") > 1:
+        text = text.replace(".", "")
+    text = re.sub(r"\s+", "", text)
+    text = text.replace(",", ".")
+    return float(text)

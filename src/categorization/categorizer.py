@@ -65,7 +65,11 @@ class Categorizer:
             return "Sonstiges"
         if self._pipeline is not None:
             label = self._pipeline.predict([description])[0]
-            return str(label)
+            label_str = str(label)
+            # Fallback auf Regelwerk, wenn das Modell nur "Other"-Klassen liefert
+            if label_str in {"EXP_OTHER", "INCOME_OTHER", "Sonstiges"}:
+                return self._rule_based(description)
+            return label_str
         return self._rule_based(description)
 
     # Internal helpers -----------------------------------------------------

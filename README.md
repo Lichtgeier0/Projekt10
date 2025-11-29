@@ -34,10 +34,14 @@ python -m src.main  # oder python src/main.py
 # Flask-UI via main.py (Form zum Hinzufügen, Tabelle + Warnungen, Chart-Button)
 python -m src.main --ui flask --debug
 
+# Streamlit-UI (lokal auf 8501, Backend wählbar: CSV oder SQLite)
+streamlit run src/ui/streamlit_app.py --server.address 127.0.0.1 --server.port 8501
+
 # Flask-UI direkt über flask (alternativ)
 export FLASK_APP=src.ui.webapp
 flask run --debug
 ```
+- Streamlit bietet Formulare für Einnahmen/Ausgaben, Monatsfilter, Plotly-Diagramme (Saldo je Monat, Ausgaben-Pie), Budget-Warnungen, CSV/PDF/Bild-Import von Kontoauszügen, sowie KI-gestützte Auto-Kategorien inkl. Trainings-Button (scikit-learn). Der Speicher kann zwischen CSV-Flatfile und SQLite umgeschaltet werden.
 - CLI-Menü unterstützt CSV-Import inkl. Spalten-Mapping + Duplikat-/Fehlerreporting, erstellt Matplotlib-Diagramme (PNG in `docs/plots/`), prüft Budgetlimits und trainiert den scikit-learn-Kategorisierer auf Knopfdruck.
 - Flask-UI enthält Formular + Live-Updates über `/api/transactions`, `/api/warnings` und `/api/charts`; Diagramme werden inline als PNG gerendert. Über `/upload_statement` lassen sich Kontoauszüge hochladen, überprüfen und übernehmen (CSV-Parser erkennt automatisch Delimiter/Spalten, PDF via `pdfplumber`, Bild/OCR via `pytesseract` inkl. Heuristik für unstrukturierte Texte). Manuelle und automatische Erfassung nutzt feste Kategorien mit Dropdown-Vorauswahl; ein Button „Alle Daten löschen“ leert das lokale CSV.
 

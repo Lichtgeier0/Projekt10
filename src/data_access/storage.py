@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -85,12 +86,24 @@ def _format_date(value: Any) -> str:
         return value.date().isoformat()
     if isinstance(value, str):
         clean = value.strip()
+        # Entferne Zeitanteile, falls vorhanden (z. B. "28.10.2025 14:34")
+        if " " in clean:
+            clean = clean.split(" ")[0]
         for char in ["/", ".", ","]:
             clean = clean.replace(char, "-")
         parts = clean.split("-")
         if len(parts) == 3 and len(parts[0]) == 2 and len(parts[2]) == 4:
             clean = f"{parts[2]}-{parts[1]}-{parts[0]}"
-        return datetime.fromisoformat(clean).date().isoformat()
+        try:
+            return datetime.fromisoformat(clean).date().isoformat()
+        except ValueError:
+            # Fallback: akzeptiere dd-mm-yy
+            for fmt in ("%d-%m-%y", "%d-%m-%Y", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(clean, fmt).date().isoformat()
+                except ValueError:
+                    continue
+    raise ValueError("Datum muss datetime oder ISO-String sein")
     raise ValueError("Datum muss datetime oder ISO-String sein")
 
 
@@ -247,3 +260,161 @@ class ExpenseStorage:
         if existing_keys is None:
             existing_keys = self._get_existing_keys()
         return key in existing_keys
+
+
+class SQLiteExpenseStorage:
+    """SQLite-backed storage with the same API as ExpenseStorage."""
+
+    def __init__(
+        self,
+        db_path: Path | None = None,
+        budget_config: BudgetConfig | None = None,
+        *,
+        seed_with_samples: bool = True,
+    ) -> None:
+        self.db_path = db_path or Path("data/processed/transactions.db")
+        self.budget_config = budget_config or load_budget_config()
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+        if seed_with_samples:
+            self._seed_if_empty()
+
+    def add_transaction(self, tx: Dict[str, Any]) -> None:
+        """Persist a new transaction record."""
+        normalized = normalize_transaction_dict(tx)
+        with self._connect() as conn:
+            try:
+                conn.execute(
+                    "INSERT INTO transactions (date, description, amount, category) VALUES (:date, :description, :amount, :category)",
+                    normalized,
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("Transaktion existiert bereits (Datum+Beschreibung+Betrag).") from exc
+            conn.commit()
+
+    def list_transactions(self, month: str | None = None) -> List[Dict[str, Any]]:
+        """Return transactions filtered by optional YYYY-MM context."""
+        query = "SELECT date, description, amount, category FROM transactions"
+        params: list[Any] = []
+        if month:
+            query += " WHERE substr(date, 1, 7) = ?"
+            params.append(month)
+        query += " ORDER BY date ASC, id ASC"
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [self._normalize_row(dict(row)) for row in rows]
+
+    def import_csv(self, csv_path: Path, column_mapping: Dict[str, str] | None = None) -> ImportReport:
+        """Bulk import transactions from a CSV bank statement."""
+        if not csv_path.exists():
+            raise FileNotFoundError(csv_path)
+        report = ImportReport(new_records=0, duplicates=0, errors=[])
+        new_rows = []
+        with self._connect() as conn, csv_path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            mapping = build_column_mapping(reader.fieldnames or [], column_mapping or {})
+            existing_keys = self._get_existing_keys(conn)
+            for idx, row in enumerate(reader, start=2):
+                try:
+                    mapped = {field: row[mapping[field]] for field in CSV_FIELDS}
+                    normalized = normalize_transaction_dict(mapped)
+                except ValueError as exc:
+                    report.errors.append(f"Zeile {idx}: {exc}")
+                    continue
+                key = self._transaction_key(normalized)
+                if key in existing_keys:
+                    report.duplicates += 1
+                    continue
+                existing_keys.add(key)
+                new_rows.append(normalized)
+            if new_rows:
+                conn.executemany(
+                    "INSERT INTO transactions (date, description, amount, category) VALUES (:date, :description, :amount, :category)",
+                    new_rows,
+                )
+                conn.commit()
+        report.new_records = len(new_rows)
+        return report
+
+    def clear_all(self) -> None:
+        """Remove all stored transactions."""
+        with self._connect() as conn:
+            conn.execute("DELETE FROM transactions")
+            conn.commit()
+
+    def check_budget_limits(self) -> Dict[str, float]:
+        """Compare totals with configured budget limits and return overruns."""
+        totals: dict[str, float] = defaultdict(float)
+        for tx in self._read_rows():
+            amount = float(tx["amount"])
+            if amount >= 0:
+                continue
+            totals[tx["category"]] += abs(amount)
+
+        warnings: dict[str, float] = {}
+        for category, limit in self.budget_config.category_limits.items():
+            spent = totals.get(category, 0.0)
+            if limit <= 0:
+                continue
+            ratio = spent / limit
+            if ratio >= self.budget_config.warning_threshold:
+                warnings[category] = round(ratio, 2)
+        return warnings
+
+    # Internal helpers -----------------------------------------------------
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_db(self) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    category TEXT NOT NULL,
+                    UNIQUE(date, description, amount)
+                )
+                """
+            )
+            conn.commit()
+
+    def _seed_if_empty(self) -> None:
+        with self._connect() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+            if count == 0:
+                rows = [normalize_transaction_dict(tx) for tx in SAMPLE_TRANSACTIONS]
+                conn.executemany(
+                    "INSERT INTO transactions (date, description, amount, category) VALUES (:date, :description, :amount, :category)",
+                    rows,
+                )
+                conn.commit()
+
+    def _normalize_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        row["amount"] = float(row["amount"])
+        row["category"] = normalize_category(row.get("category"), row["amount"], row.get("description"))
+        return row
+
+    def _read_rows(self) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT date, description, amount, category FROM transactions").fetchall()
+        return [self._normalize_row(dict(row)) for row in rows]
+
+    def _get_existing_keys(self, conn: sqlite3.Connection) -> Set[Tuple[str, str, float]]:
+        keys: Set[Tuple[str, str, float]] = set()
+        cursor = conn.execute("SELECT date, description, amount FROM transactions")
+        for date, description, amount in cursor.fetchall():
+            keys.add(self._transaction_key({"date": date, "description": description, "amount": amount}))
+        return keys
+
+    def _transaction_key(self, row: Dict[str, Any]) -> Tuple[str, str, float]:
+        return (
+            str(row["date"]),
+            str(row["description"]).strip().lower(),
+            round(float(row["amount"]), 2),
+        )

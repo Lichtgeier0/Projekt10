@@ -65,6 +65,14 @@ CATEGORY_SYNONYMS: Dict[str, str] = {
     "steuer": "EXP_FINANCE_TAX_FEES",
     "gebühr": "EXP_FINANCE_TAX_FEES",
     "sonstige ausgaben": "EXP_OTHER",
+    "weitere ausgaben": "EXP_OTHER",
+    "shopping": "EXP_LEISURE",
+    "supermarkt": "EXP_GROCERIES",
+    "energie": "EXP_HOUSING",
+    "wohnen": "EXP_HOUSING",
+    "wohnen & haushalt": "EXP_HOUSING",
+    "haushalt": "EXP_HOUSING",
+    "drogerie": "EXP_GROCERIES",
 }
 
 KEYWORD_MAP: Dict[str, str] = {
