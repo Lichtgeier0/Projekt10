@@ -70,7 +70,7 @@ def _budget_warnings(df: pd.DataFrame, budget_config: BudgetConfig) -> List[Reco
 def _top_merchants(df: pd.DataFrame) -> List[Recommendation]:
     recs: List[Recommendation] = []
     _, current = _current_period(df)
-    spend = current[current["amount"] < 0]
+    spend = current[current["amount"] < 0].copy()
     if spend.empty:
         return recs
     spend["abs_amount"] = spend["amount"].abs()
@@ -118,7 +118,7 @@ def _savings_rate(df: pd.DataFrame) -> List[Recommendation]:
 
 def _subscriptions(df: pd.DataFrame) -> List[Recommendation]:
     recs: List[Recommendation] = []
-    spend = df[df["amount"] < 0]
+    spend = df[df["amount"] < 0].copy()
     if spend.empty:
         return recs
     spend["rounded"] = spend["amount"].round(2)

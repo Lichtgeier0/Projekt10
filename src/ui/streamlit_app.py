@@ -22,6 +22,7 @@ from src.data_access.storage import ExpenseStorage, SQLiteExpenseStorage
 from src.analysis.recommendations import generate_recommendations
 from src.ml.category_predictor import load_category_model, predict_category
 from src.ml.anomaly_detector import load_anomaly_model, is_anomalous
+from src.ml.budget_adjuster import adjust_budget_config
 from src.utils.categories import CATEGORY_BY_KEY, CATEGORY_LABELS, get_category_groups, normalize_category, suggest_category
 
 st.set_page_config(page_title="Ausgaben-Manager (Streamlit)", layout="wide")
@@ -343,36 +344,26 @@ backend_label = st.sidebar.radio("Datenspeicher", ["CSV", "SQLite"], help="CSV a
 backend = backend_label.lower()
 storage = get_storage(backend)
 categorizer = get_categorizer()
-
 transactions_all = storage.list_transactions()
+effective_budget = adjust_budget_config(transactions_all, storage.budget_config).limits
+
 available_months = sorted({str(tx["date"])[:7] for tx in transactions_all})
 month_filter = st.sidebar.selectbox("Monatsfilter", ["Alle"] + available_months, index=0)
 filtered_month = None if month_filter == "Alle" else month_filter
 transactions = storage.list_transactions(filtered_month)
+tx_scope = transactions  # alle Sichten orientieren sich am gewählten Monatsfilter
 
-warn_data = storage.check_budget_limits()
-totals_filtered = totals(transactions)
+totals_filtered = totals(tx_scope)
 col_a, col_b, col_c = st.columns(3)
 col_a.metric("Einnahmen", f"{totals_filtered['income']:.2f} €")
 col_b.metric("Ausgaben", f"{totals_filtered['expense']:.2f} €")
 col_c.metric("Saldo", f"{totals_filtered['net']:.2f} €")
 
-avg = monthly_average(transactions_all)
+avg = monthly_average(tx_scope)
 col_d, col_e, col_f = st.columns(3)
 col_d.metric("Durchschnitt mtl. Einnahmen", f"{avg['income']:.2f} €")
 col_e.metric("Durchschnitt mtl. Ausgaben", f"{avg['expense']:.2f} €")
 col_f.metric("Durchschnitt mtl. Saldo", f"{avg['net']:.2f} €")
-
-if warn_data:
-    st.warning(
-        "Budgetlimits fast erreicht oder überschritten: "
-        + ", ".join(
-            f"{CATEGORY_LABELS.get(cat, cat)} ({ratio * 100:.0f}% des Limits)"
-            for cat, ratio in warn_data.items()
-        )
-    )
-else:
-    st.success("Keine Budget-Warnungen aktiv.")
 
 tab_input, tab_overview, tab_import, tab_ai, tab_trends = st.tabs(
     ["Transaktionen", "Übersicht & Diagramme", "Import & KI", "KI-Empfehlungen", "Trends"]
@@ -459,13 +450,13 @@ with tab_input:
             end_date=end_date if period_selected != "Alle" else None,
         )
         transactions_sorted = sorted(filtered_tx, key=lambda tx: str(tx["date"]), reverse=True)
-        st.dataframe(format_transactions(transactions_sorted), use_container_width=True, hide_index=True)
+        st.dataframe(format_transactions(transactions_sorted), width="stretch", hide_index=True)
     else:
         st.info("Keine Transaktionen im ausgewählten Zeitraum.")
 
 with tab_overview:
     st.subheader("Monatliche Übersicht")
-    overview_rows = monthly_overview(transactions_all)
+    overview_rows = monthly_overview(tx_scope)
     if overview_rows:
         display_rows = [
             {
@@ -476,7 +467,7 @@ with tab_overview:
             }
             for row in overview_rows
         ]
-        st.dataframe(display_rows, use_container_width=True, hide_index=True)
+        st.dataframe(display_rows, width="stretch", hide_index=True)
     else:
         st.info("Noch keine Daten für eine Monatsübersicht vorhanden.")
 
@@ -488,7 +479,7 @@ with tab_overview:
         colors = ["#27ae60" if value >= 0 else "#c0392b" for value in net_values]
         fig_monthly = go.Figure(data=[go.Bar(x=months, y=net_values, marker_color=colors)])
         fig_monthly.update_layout(title="Saldo pro Monat", yaxis_title="EUR")
-        chart_col1.plotly_chart(fig_monthly, use_container_width=True)
+        chart_col1.plotly_chart(fig_monthly, width="stretch")
     else:
         chart_col1.info("Kein Monatschart möglich.")
 
@@ -497,12 +488,12 @@ with tab_overview:
         labels = [CATEGORY_LABELS.get(cat, cat) for cat in expense_totals.keys()]
         values = list(expense_totals.values())
         fig_pie = px.pie(values=values, names=labels, title="Ausgaben nach Kategorie", hole=0.25)
-        chart_col2.plotly_chart(fig_pie, use_container_width=True)
+        chart_col2.plotly_chart(fig_pie, width="stretch")
     else:
         chart_col2.info("Keine Ausgaben für ein Kreisdiagramm vorhanden.")
 
     st.subheader("Budget-Füllstand (monatlich, Batterie-Ansicht)")
-    df_usage = budget_usage_dataframe(transactions_all, storage.budget_config)
+    df_usage = budget_usage_dataframe(tx_scope, type("obj", (object,), {"category_limits": effective_budget}))
     if not df_usage.empty:
         fig_battery = go.Figure()
         fig_battery.add_bar(
@@ -536,13 +527,14 @@ with tab_overview:
             yaxis_title="Kategorie",
             legend_title="Status",
         )
-        st.plotly_chart(fig_battery, use_container_width=True)
+        st.plotly_chart(fig_battery, width="stretch")
     else:
         st.info("Keine Ausgaben im aktuellen Monat für Budget-Kategorien gefunden.")
 
 with tab_ai:
     st.subheader("KI-Empfehlungen zur Finanzoptimierung")
-    recs = generate_recommendations(transactions_all, storage.budget_config)
+    # Empfehlungen basieren auf dynamisch angepassten Budgets
+    recs = generate_recommendations(tx_scope, type("obj", (object,), {"category_limits": effective_budget, "warning_threshold": storage.budget_config.warning_threshold}))
     if not recs:
         st.info("Noch keine Empfehlungen verfügbar. Bitte Transaktionen importieren oder hinzufügen.")
     else:
@@ -557,7 +549,7 @@ with tab_ai:
 
 with tab_trends:
     st.subheader("Trends (historische Entwicklung)")
-    trends = analyze_trends(transactions_all)
+    trends = analyze_trends(tx_scope)
     if not trends["positive"] and not trends["negative"]:
         st.info("Noch keine Trends verfügbar. Bitte mehr Transaktionen/Monate importieren.")
     else:
@@ -584,7 +576,7 @@ with tab_import:
             st.write(parsed[:5])
         if parsed:
             st.success(f"{len(parsed)} Transaktionen im Upload erkannt.")
-            st.dataframe(format_transactions(parsed), use_container_width=True, hide_index=True)
+            st.dataframe(format_transactions(parsed), width="stretch", hide_index=True)
             if st.button("Importieren", key="import-button"):
                 imported = 0
                 duplicates = 0
